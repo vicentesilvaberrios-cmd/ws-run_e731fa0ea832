@@ -1,0 +1,35 @@
+{
+  "backend": [
+    "NEW supabase/migrations/0006_professionals.sql: crear tabla professionals (id, org_id, name, active, created_at) con RLS por org_id usando is_member/is_admin; agregar columna professional_id a business_hours, breaks y appointments; BACKFILL por organización creando un profesional por defecto y asignando las filas existentes de business_hours/breaks/appointments; poner professional_id NOT NULL en las tres tablas; reemplazar constraint no_overlap_booked por uno que excluya solape por (professional_id with =, org_id with =, tstzrange &&) where status='booked'; redefinir public_availability(p_slug, p_service_id, p_date, p_professional_id) considerando el profesional (filtrar business_hours/breaks por professional_id y solape de appointments por professional_id) manteniendo el cast AT TIME ZONE 'America/Santiago'; redefinir create_appointment y owner_create_appointment para recibir p_professional_id y validarlo/insertarlo; agregar RPC public_professionals(p_slug) que devuelva profesionales activos",
+    "EDIT app/api/business-hours/route.ts: aceptar y filtrar/insertar professional_id en GET y POST",
+    "EDIT app/api/business-hours/[id]/route.ts: mantener professional_id al actualizar (PUT) si aplica",
+    "EDIT app/api/breaks/route.ts: aceptar y filtrar/insertar professional_id en GET y POST",
+    "EDIT app/api/breaks/[id]/route.ts: mantener professional_id al actualizar (PUT) si aplica",
+    "EDIT app/api/appointments/route.ts: incluir professional_id en el GET (select y mapa) y pasar p_professional_id a owner_create_appointment en el POST",
+    "EDIT app/api/public/[slug]/availability/route.ts: leer professionalId del query y pasarlo como p_professional_id a public_availability",
+    "EDIT app/api/public/[slug]/appointments/route.ts: leer professionalId del body y pasarlo a create_appointment",
+    "NEW app/api/professionals/route.ts: GET lista de profesionales del org (is_member) y POST crear profesional (is_admin)",
+    "NEW app/api/professionals/[id]/route.ts: PATCH (editar nombre/active) y DELETE profesional, validando org/admin",
+    "NEW app/api/public/[slug]/professionals/route.ts: GET profesionales activos vía RPC public_professionals"
+  ],
+  "frontend": [
+    "NEW app/dashboard/profesionales/page.tsx: página del panel para el CRUD de profesionales",
+    "NEW app/dashboard/profesionales/ProfessionalsManager.tsx: componente cliente que lista, crea, edita y desactiva/elimina profesionales contra /api/professionals",
+    "EDIT app/dashboard/layout.tsx: agregar enlace 'Profesionales' en la navegación del panel",
+    "EDIT app/dashboard/horario/HoursEditor.tsx: agregar selector de profesional y cargar/guardar horarios y descansos por professional_id",
+    "EDIT app/book/[slug]/BookingWizard.tsx: agregar paso/selector de profesional (incluyendo 'cualquiera disponible'), cargar profesionales desde /api/public/[slug]/professionals, pasar professionalId a availability y al POST de reserva, y mostrarlo en la confirmación",
+    "EDIT app/dashboard/agenda/AgendaList.tsx: mostrar el profesional de cada cita y permitir elegir profesional en CreateAppointmentForm enviando professional_id",
+    "EDIT app/book/[slug]/confirmacion/page.tsx: mostrar el profesional reservado si está disponible en los datos de la reserva"
+  ],
+  "acceptance_criteria": [
+    "Existe la migración incremental 0006 sin modificar 0001-0005; crea la tabla professionals con RLS por org_id (is_member/is_admin)",
+    "business_hours, breaks y appointments tienen professional_id NOT NULL tras un backfill que crea un profesional por defecto por organización y reasigna las filas existentes sin perder datos",
+    "El constraint de no-solape aplica por professional_id: dos citas del mismo profesional no pueden solaparse, pero distintos profesionales sí pueden a la misma hora",
+    "public_availability calcula la disponibilidad por profesional manteniendo la zona horaria America/Santiago",
+    "El dueño puede crear, editar y desactivar/eliminar profesionales desde el panel, y asignar horarios y descansos por profesional",
+    "La página pública de reserva permite elegir profesional o 'cualquiera disponible' y muestra disponibilidad acorde al profesional",
+    "La creación de cita manual y la agenda permiten elegir/mostrar el profesional de cada cita",
+    "Se respetan RLS multi-tenant por org_id, el no-solape por profesional, la zona horaria Chile y los precios en CLP; no se agregan otras features",
+    "El build de Railway pasa (next ^14.2.35) y todas las tablas referenciadas existen en migraciones en orden de dependencias"
+  ]
+}
