@@ -19,6 +19,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <Link href="/dashboard" className="text-sm" style={{ fontWeight: 600 }}>Inicio</Link>
           <Link href="/dashboard/resumen" className="text-sm" style={{ fontWeight: 600 }}>Resumen</Link>
           <Link href="/dashboard/servicios" className="text-sm" style={{ fontWeight: 600 }}>Servicios</Link>
+          <Link href="/dashboard/profesionales" className="text-sm" style={{ fontWeight: 600 }}>Profesionales</Link>
           <Link href="/dashboard/horario" className="text-sm" style={{ fontWeight: 600 }}>Horario</Link>
           <Link href="/dashboard/agenda" className="text-sm" style={{ fontWeight: 600 }}>Agenda</Link>
           <Link href="/dashboard/clientes" className="text-sm" style={{ fontWeight: 600 }}>Fichas</Link>

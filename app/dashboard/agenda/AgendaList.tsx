@@ -12,12 +12,19 @@ interface AgendaItem {
   customer_email: string;
   status: string;
   service: { id: string; name: string; duration_min: number } | null;
+  professional_name: string | null;
 }
 
 interface Service {
   id: string;
   name: string;
   duration_min: number;
+}
+
+interface Professional {
+  id: string;
+  name: string;
+  active: boolean;
 }
 
 function todayStr(): string {
@@ -177,6 +184,7 @@ export function AgendaList({ initialDate, slug }: { initialDate: string; slug: s
               <tr>
                 <th scope="col">Hora</th>
                 <th scope="col">Servicio</th>
+                <th scope="col">Profesional</th>
                 <th scope="col">Cliente</th>
                 <th scope="col">Contacto</th>
                 <th scope="col">Estado</th>
@@ -190,6 +198,7 @@ export function AgendaList({ initialDate, slug }: { initialDate: string; slug: s
                     {formatTime(item.starts_at)}
                   </td>
                   <td>{item.service?.name ?? '—'}</td>
+                  <td>{item.professional_name ?? '—'}</td>
                   <td>{item.customer_name}</td>
                   <td className="text-sm">
                     <div>{item.customer_phone}</div>
@@ -259,6 +268,10 @@ function CreateAppointmentForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [professionalsLoading, setProfessionalsLoading] = useState(true);
+  const [professionalId, setProfessionalId] = useState('');
+
   const [serviceId, setServiceId] = useState('');
   const [slots, setSlots] = useState<{ starts_at: string; ends_at: string }[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -282,15 +295,26 @@ function CreateAppointmentForm({
         setServicesLoading(false);
       })
       .catch(() => setServicesLoading(false));
+
+    fetch('/api/professionals')
+      .then((r) => r.json())
+      .then((data) => {
+        const active = (Array.isArray(data) ? data : []).filter((p: Professional) => p.active);
+        setProfessionals(active);
+        setProfessionalsLoading(false);
+      })
+      .catch(() => setProfessionalsLoading(false));
   }, []);
 
-  const loadSlots = useCallback(async (svcId: string) => {
+  const loadSlots = useCallback(async (svcId: string, profId: string) => {
     setSlotsLoading(true);
     setSlotsError(false);
     setSelectedSlot(null);
     try {
+      const params = new URLSearchParams({ serviceId: svcId, date });
+      if (profId) params.set('professionalId', profId);
       const res = await fetch(
-        `/api/public/${slug}/availability?serviceId=${svcId}&date=${date}`
+        `/api/public/${slug}/availability?${params.toString()}`
       );
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -305,8 +329,19 @@ function CreateAppointmentForm({
   const handleServiceChange = (svcId: string) => {
     setServiceId(svcId);
     clearFieldError('serviceId');
-    if (svcId) {
-      loadSlots(svcId);
+    if (svcId && professionalId) {
+      loadSlots(svcId, professionalId);
+    } else {
+      setSlots([]);
+      setSelectedSlot(null);
+    }
+  };
+
+  const handleProfessionalChange = (profId: string) => {
+    setProfessionalId(profId);
+    clearFieldError('professionalId');
+    if (profId && serviceId) {
+      loadSlots(serviceId, profId);
     } else {
       setSlots([]);
       setSelectedSlot(null);
@@ -318,6 +353,7 @@ function CreateAppointmentForm({
     setFormError(null);
 
     const errors: Record<string, string> = {};
+    if (!professionalId) errors.professionalId = 'Elige un profesional para la cita.';
     if (!serviceId) errors.serviceId = 'Selecciona un servicio';
     if (!selectedSlot) errors.slot = 'Elige un horario disponible';
     if (!name.trim()) errors.name = 'El nombre es obligatorio';
@@ -341,6 +377,7 @@ function CreateAppointmentForm({
           customer_name: name.trim(),
           customer_phone: phone.trim(),
           customer_email: email.trim(),
+          professional_id: professionalId,
         }),
       });
 
@@ -372,8 +409,13 @@ function CreateAppointmentForm({
         <div className="alert alert-success" role="status">{successMsg}</div>
       )}
 
-      {servicesLoading ? (
+      {servicesLoading || professionalsLoading ? (
         <p className="muted">Cargando servicios…</p>
+      ) : professionals.length === 0 ? (
+        <div className="alert alert-info">
+          Crea y activa un profesional antes de agendar citas.{' '}
+          <a href="/dashboard/profesionales" className="link">Ir a profesionales</a>
+        </div>
       ) : services.length === 0 ? (
         <div className="alert alert-info">
           No tienes servicios configurados.{' '}
@@ -381,6 +423,26 @@ function CreateAppointmentForm({
         </div>
       ) : (
         <>
+          <div className="field">
+            <label htmlFor="form-professional">Profesional</label>
+            <select
+              id="form-professional"
+              value={professionalId}
+              onChange={(e) => handleProfessionalChange(e.target.value)}
+              aria-invalid={!!fieldErrors.professionalId}
+              aria-describedby={fieldErrors.professionalId ? 'form-professional-error' : undefined}
+              required
+            >
+              <option value="">Selecciona un profesional</option>
+              {professionals.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {fieldErrors.professionalId && (
+              <p id="form-professional-error" className="error-text">{fieldErrors.professionalId}</p>
+            )}
+          </div>
+
           <div className="field">
             <label htmlFor="form-service">Servicio</label>
             <select
@@ -403,14 +465,14 @@ function CreateAppointmentForm({
             )}
           </div>
 
-          {serviceId && (
+          {serviceId && professionalId && (
             <div className="field">
               <span className="label">Horario disponible</span>
               {slotsLoading && <p className="muted">Buscando horarios…</p>}
               {slotsError && (
                 <div className="alert alert-error" role="alert">
                   No pudimos cargar los horarios.{' '}
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => loadSlots(serviceId)}>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => loadSlots(serviceId, professionalId)}>
                     Reintentar
                   </button>
                 </div>

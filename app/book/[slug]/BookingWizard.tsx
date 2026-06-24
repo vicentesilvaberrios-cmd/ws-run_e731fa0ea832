@@ -16,14 +16,20 @@ interface Slot {
   ends_at: string;
 }
 
-type Step = 1 | 2 | 3 | 4 | 5;
+interface Professional {
+  id: string;
+  name: string;
+}
+
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 const STEP_LABELS: Record<Step, string> = {
   1: 'Servicio',
-  2: 'Fecha',
-  3: 'Horario',
-  4: 'Tus datos',
-  5: 'Confirmar',
+  2: 'Profesional',
+  3: 'Fecha',
+  4: 'Horario',
+  5: 'Tus datos',
+  6: 'Confirmar',
 };
 
 export function BookingWizard({
@@ -43,6 +49,14 @@ export function BookingWizard({
   const [servicesError, setServicesError] = useState(false);
 
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [loadingProfessionals, setLoadingProfessionals] = useState(false);
+  const [professionalsError, setProfessionalsError] = useState(false);
+  // 'any' = cualquiera disponible, otherwise a professional id
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState<string>('any');
+  const [selectedProfessionalName, setSelectedProfessionalName] = useState<string>('Cualquiera disponible');
+
   const [selectedDate, setSelectedDate] = useState('');
   const [dateTouched, setDateTouched] = useState(false);
 
@@ -82,12 +96,14 @@ export function BookingWizard({
   }, [loadServices]);
 
   // Load availability
-  const loadSlots = useCallback(async (serviceId: string, date: string) => {
+  const loadSlots = useCallback(async (serviceId: string, date: string, profId: string) => {
     setLoadingSlots(true);
     setSlotsError(false);
     try {
+      const params = new URLSearchParams({ serviceId, date });
+      if (profId && profId !== 'any') params.set('professionalId', profId);
       const res = await fetch(
-        `/api/public/${slug}/availability?serviceId=${serviceId}&date=${date}`
+        `/api/public/${slug}/availability?${params.toString()}`
       );
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -99,22 +115,44 @@ export function BookingWizard({
     }
   }, [slug]);
 
-  const handleSelectService = (service: Service) => {
-    setSelectedService(service);
-    setStep(2);
-  };
-
   const handleViewSlots = () => {
     setDateTouched(true);
     if (!selectedDate || !selectedService) return;
     if (selectedDate < todayStr) return;
-    setStep(3);
-    loadSlots(selectedService.id, selectedDate);
+    setStep(4);
+    loadSlots(selectedService.id, selectedDate, selectedProfessionalId);
   };
 
   const handleSelectSlot = (slot: Slot) => {
     setSelectedSlot(slot);
-    setStep(4);
+    setStep(5);
+  };
+
+  const handleSelectService = (service: Service) => {
+    setSelectedService(service);
+    loadProfessionals();
+    setStep(2);
+  };
+
+  const loadProfessionals = useCallback(async () => {
+    setLoadingProfessionals(true);
+    setProfessionalsError(false);
+    try {
+      const res = await fetch(`/api/public/${slug}/professionals`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setProfessionals(data);
+    } catch {
+      setProfessionalsError(true);
+    } finally {
+      setLoadingProfessionals(false);
+    }
+  }, [slug]);
+
+  const handleSelectProfessional = (id: string, name: string) => {
+    setSelectedProfessionalId(id);
+    setSelectedProfessionalName(name);
+    setStep(3);
   };
 
   const nameError = customerNameTouched && !customerName.trim() ? 'Tu nombre es obligatorio' : '';
@@ -150,14 +188,15 @@ export function BookingWizard({
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim(),
           customer_email: customerEmail.trim(),
+          ...(selectedProfessionalId !== 'any' ? { professionalId: selectedProfessionalId } : {}),
         }),
       });
 
       if (res.status === 409) {
         setBookingError('Ese horario acaba de ser reservado por otra persona. Elige otro.');
-        setStep(3);
+        setStep(4);
         if (selectedService && selectedDate) {
-          loadSlots(selectedService.id, selectedDate);
+          loadSlots(selectedService.id, selectedDate, selectedProfessionalId);
         }
         setSubmitting(false);
         return;
@@ -176,6 +215,7 @@ export function BookingWizard({
         id: data.id,
         orgName: initialOrgName,
         serviceName: selectedService.name,
+        professionalName: selectedProfessionalName,
         durationMin: selectedService.duration_min,
         price: selectedService.price,
         date: selectedDate,
@@ -208,7 +248,7 @@ export function BookingWizard({
 
       {/* Step indicator */}
       <div className="cluster" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-        {([1, 2, 3, 4, 5] as Step[]).map((s, i) => (
+        {([1, 2, 3, 4, 5, 6] as Step[]).map((s, i) => (
           <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-1)' }}>
             <span
               className="badge"
@@ -224,7 +264,7 @@ export function BookingWizard({
               {s}
             </span>
             <span className="text-sm muted">{STEP_LABELS[s]}</span>
-            {i < 4 && <span className="muted text-sm">→</span>}
+            {i < 5 && <span className="muted text-sm">→</span>}
           </span>
         ))}
       </div>
@@ -272,8 +312,49 @@ export function BookingWizard({
         </div>
       )}
 
-      {/* Step 2: Fecha */}
+      {/* Step 2: Profesional */}
       {step === 2 && (
+        <div className="stack">
+          <h2>¿Con quién quieres tu cita?</h2>
+          {loadingProfessionals && <p className="muted">Cargando profesionales…</p>}
+          {professionalsError && (
+            <div className="alert alert-error" role="alert">
+              No pudimos cargar los profesionales.{' '}
+              <button className="btn btn-sm btn-ghost" onClick={loadProfessionals}>Reintentar</button>
+            </div>
+          )}
+          {!loadingProfessionals && !professionalsError && (
+            <div className="grid grid-sm-2">
+              <button
+                className="card stack"
+                style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)' }}
+                aria-pressed={selectedProfessionalId === 'any'}
+                onClick={() => handleSelectProfessional('any', 'Cualquiera disponible')}
+              >
+                <h3>Cualquiera disponible</h3>
+                <span className="text-sm muted">No tienes preferencia</span>
+              </button>
+              {professionals.map((p) => (
+                <button
+                  key={p.id}
+                  className="card stack"
+                  style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)' }}
+                  aria-pressed={selectedProfessionalId === p.id}
+                  onClick={() => handleSelectProfessional(p.id, p.name)}
+                >
+                  <h3>{p.name}</h3>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="cluster">
+            <button className="btn btn-ghost" onClick={() => setStep(1)}>Atrás</button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Fecha */}
+      {step === 3 && (
         <div className="stack">
           <h2>Elige el día</h2>
           <div className="field">
@@ -298,7 +379,7 @@ export function BookingWizard({
             )}
           </div>
           <div className="cluster">
-            <button className="btn btn-ghost" onClick={() => setStep(1)}>Atrás</button>
+            <button className="btn btn-ghost" onClick={() => setStep(2)}>Atrás</button>
             <button className="btn btn-primary" onClick={handleViewSlots} disabled={!!pastDateError}>
               Ver horarios disponibles
             </button>
@@ -306,8 +387,8 @@ export function BookingWizard({
         </div>
       )}
 
-      {/* Step 3: Horario */}
-      {step === 3 && (
+      {/* Step 4: Horario */}
+      {step === 4 && (
         <div className="stack">
           <h2>Horarios disponibles</h2>
           <p className="text-sm muted">
@@ -319,7 +400,7 @@ export function BookingWizard({
               No pudimos cargar los horarios.{' '}
               <button
                 className="btn btn-sm btn-ghost"
-                onClick={() => selectedService && loadSlots(selectedService.id, selectedDate)}
+                onClick={() => selectedService && loadSlots(selectedService.id, selectedDate, selectedProfessionalId)}
               >
                 Reintentar
               </button>
@@ -327,7 +408,9 @@ export function BookingWizard({
           )}
           {!loadingSlots && !slotsError && slots.length === 0 && (
             <div className="empty-state">
-              No hay horarios disponibles para ese día. Prueba con otra fecha.
+              {selectedProfessionalId !== 'any'
+                ? `No hay horarios disponibles con ${selectedProfessionalName} para ese día. Prueba otra fecha o elige otro profesional.`
+                : 'No hay horarios disponibles para ese día. Prueba con otra fecha.'}
             </div>
           )}
           {!loadingSlots && !slotsError && slots.length > 0 && (
@@ -344,13 +427,16 @@ export function BookingWizard({
             </div>
           )}
           <div className="cluster">
-            <button className="btn btn-ghost" onClick={() => setStep(2)}>Atrás</button>
+            <button className="btn btn-ghost" onClick={() => setStep(3)}>Atrás</button>
+            {selectedProfessionalId !== 'any' && (
+              <button className="btn btn-ghost" onClick={() => setStep(2)}>Cambiar profesional</button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Step 4: Datos */}
-      {step === 4 && (
+      {/* Step 5: Datos */}
+      {step === 5 && (
         <div className="stack">
           <h2>Tus datos</h2>
           <div className="field">
@@ -408,10 +494,10 @@ export function BookingWizard({
             {emailError && <span id="cust-email-error" className="error-text" role="alert">{emailError}</span>}
           </div>
           <div className="cluster">
-            <button className="btn btn-ghost" onClick={() => setStep(3)}>Atrás</button>
+            <button className="btn btn-ghost" onClick={() => setStep(4)}>Atrás</button>
             <button
               className="btn btn-primary"
-              onClick={() => setStep(5)}
+              onClick={() => setStep(6)}
               disabled={!customerName.trim() || !customerPhone.trim() || !/^.+@.+\..+$/.test(customerEmail)}
             >
               Siguiente
@@ -420,8 +506,8 @@ export function BookingWizard({
         </div>
       )}
 
-      {/* Step 5: Confirmar */}
-      {step === 5 && (
+      {/* Step 6: Confirmar */}
+      {step === 6 && (
         <div className="stack">
           <h2>Confirma tu reserva</h2>
           <div className="panel stack">
@@ -429,6 +515,10 @@ export function BookingWizard({
               <div className="cluster" style={{ justifyContent: 'space-between' }}>
                 <span className="muted text-sm">Servicio</span>
                 <span style={{ fontWeight: 600 }}>{selectedService?.name}</span>
+              </div>
+              <div className="cluster" style={{ justifyContent: 'space-between' }}>
+                <span className="muted text-sm">Profesional</span>
+                <span style={{ fontWeight: 600 }}>{selectedProfessionalName}</span>
               </div>
               <div className="cluster" style={{ justifyContent: 'space-between' }}>
                 <span className="muted text-sm">Duración</span>
@@ -462,7 +552,7 @@ export function BookingWizard({
             </div>
           </div>
           <div className="cluster">
-            <button className="btn btn-ghost" onClick={() => setStep(4)} disabled={submitting}>
+            <button className="btn btn-ghost" onClick={() => setStep(5)} disabled={submitting}>
               Atrás
             </button>
             <button className="btn btn-primary" onClick={handleConfirm} disabled={submitting}>

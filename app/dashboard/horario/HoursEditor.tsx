@@ -16,6 +16,12 @@ interface Break {
   end_time: string;
 }
 
+interface Professional {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 export function HoursEditor() {
@@ -25,18 +31,44 @@ export function HoursEditor() {
   const [error, setError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [profLoading, setProfLoading] = useState(true);
+  const [selectedProf, setSelectedProf] = useState<string>('');
+
   // Inline add state per day
   const [newHour, setNewHour] = useState<Record<number, { start: string; end: string }>>({});
   const [newBreak, setNewBreak] = useState<Record<number, { start: string; end: string }>>({});
   const [savingDay, setSavingDay] = useState<number | null>(null);
 
+  const loadProfessionals = useCallback(async () => {
+    setProfLoading(true);
+    try {
+      const res = await fetch('/api/professionals');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setProfessionals(data);
+      if (data.length > 0 && !selectedProf) {
+        setSelectedProf(data[0].id);
+      }
+    } catch {
+      // handled by empty state
+    } finally {
+      setProfLoading(false);
+    }
+  }, [selectedProf]);
+
+  useEffect(() => {
+    loadProfessionals();
+  }, [loadProfessionals]);
+
   const loadAll = useCallback(async () => {
+    if (!selectedProf) return;
     setLoading(true);
     setError(false);
     try {
       const [hRes, bRes] = await Promise.all([
-        fetch('/api/business-hours'),
-        fetch('/api/breaks'),
+        fetch(`/api/business-hours?professionalId=${selectedProf}`),
+        fetch(`/api/breaks?professionalId=${selectedProf}`),
       ]);
       if (!hRes.ok || !bRes.ok) throw new Error();
       const [hData, bData] = await Promise.all([hRes.json(), bRes.json()]);
@@ -47,11 +79,12 @@ export function HoursEditor() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedProf]);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (selectedProf) loadAll();
+    else { setHours([]); setBreaks([]); setLoading(false); }
+  }, [selectedProf, loadAll]);
 
   const validateTime = (start: string, end: string): string | null => {
     if (!start || !end) return 'Completa la hora de inicio y fin';
@@ -72,7 +105,7 @@ export function HoursEditor() {
       const res = await fetch('/api/business-hours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weekday, start_time: entry.start, end_time: entry.end }),
+        body: JSON.stringify({ weekday, start_time: entry.start, end_time: entry.end, professional_id: selectedProf }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -110,7 +143,7 @@ export function HoursEditor() {
       const res = await fetch('/api/breaks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weekday, start_time: entry.start, end_time: entry.end }),
+        body: JSON.stringify({ weekday, start_time: entry.start, end_time: entry.end, professional_id: selectedProf }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -135,6 +168,17 @@ export function HoursEditor() {
     }
   };
 
+  if (profLoading) return <p className="muted">Cargando profesionales…</p>;
+
+  if (!profLoading && professionals.length === 0) {
+    return (
+      <div className="alert alert-info">
+        Primero crea un profesional para configurar su horario.{' '}
+        <a href="/dashboard/profesionales" className="link">Ir a profesionales</a>
+      </div>
+    );
+  }
+
   if (loading) return <p className="muted">Cargando horario…</p>;
   if (error) {
     return (
@@ -145,8 +189,31 @@ export function HoursEditor() {
     );
   }
 
+  const selectedProfessional = professionals.find((p) => p.id === selectedProf);
+
   return (
     <div className="stack">
+      <div className="card">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label htmlFor="hours-professional">Profesional</label>
+          <select
+            id="hours-professional"
+            value={selectedProf}
+            onChange={(e) => setSelectedProf(e.target.value)}
+            style={{ maxWidth: 320 }}
+          >
+            {professionals.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{!p.active ? ' (Inactivo)' : ''}
+              </option>
+            ))}
+          </select>
+          {selectedProfessional && !selectedProfessional.active && (
+            <span className="badge badge-warn" style={{ alignSelf: 'flex-start' }}>Inactivo</span>
+          )}
+        </div>
+      </div>
+
       {errorMsg && (
         <div className="alert alert-error" role="alert">{errorMsg}</div>
       )}

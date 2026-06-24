@@ -16,6 +16,7 @@ interface BookingData {
   customerName: string;
   customerPhone: string;
   customerEmail: string;
+  professionalName?: string;
   emailSent?: boolean;
 }
 
@@ -96,6 +97,12 @@ export default function ConfirmacionPage({ params }: { params: Promise<{ slug: s
             <span className="muted text-sm">Servicio</span>
             <span style={{ fontWeight: 600 }}>{booking.serviceName}</span>
           </div>
+          {booking.professionalName && (
+            <div className="cluster" style={{ justifyContent: 'space-between' }}>
+              <span className="muted text-sm">Profesional</span>
+              <span style={{ fontWeight: 600 }}>{booking.professionalName}</span>
+            </div>
+          )}
           <div className="cluster" style={{ justifyContent: 'space-between' }}>
             <span className="muted text-sm">Duración</span>
             <span>{booking.durationMin} min</span>

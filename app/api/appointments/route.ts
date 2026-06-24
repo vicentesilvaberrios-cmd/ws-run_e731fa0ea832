@@ -58,9 +58,21 @@ export async function GET(request: Request) {
     (services ?? []).map((s) => [s.id, s])
   );
 
+  // Fetch related professionals
+  const profIds = [...new Set(appts.filter((a) => a.professional_id).map((a) => a.professional_id!))];
+  const profMap = new Map<string, string>();
+  if (profIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('professionals')
+      .select('id,name')
+      .in('id', profIds);
+    (profs ?? []).forEach((p) => profMap.set(p.id, p.name));
+  }
+
   const data = appts.map((a) => ({
     ...a,
     service: serviceMap.get(a.service_id) ?? null,
+    professional_name: a.professional_id ? (profMap.get(a.professional_id) ?? null) : null,
   }));
 
   return NextResponse.json(data);
