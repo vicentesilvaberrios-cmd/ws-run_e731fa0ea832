@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentOrg } from '@/lib/org';
 
-export async function PUT(
+export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -20,27 +20,30 @@ export async function PUT(
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
   }
 
-  const { weekday, start_time, end_time, professional_id } = body as {
-    weekday?: number;
-    start_time?: string;
-    end_time?: string;
-    professional_id?: string;
+  const { name, active } = body as {
+    name?: string;
+    active?: boolean;
   };
 
-  if (weekday !== undefined && (typeof weekday !== 'number' || weekday < 0 || weekday > 6)) {
-    return NextResponse.json({ error: 'Día de la semana inválido (0-6)' }, { status: 400 });
+  const update: Record<string, unknown> = {};
+  if (name !== undefined) {
+    if (typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json({ error: 'El nombre no puede estar vacío' }, { status: 400 });
+    }
+    update.name = name.trim();
+  }
+  if (active !== undefined) {
+    update.active = active;
   }
 
-  const update: Record<string, unknown> = {};
-  if (weekday !== undefined) update.weekday = weekday;
-  if (start_time !== undefined) update.start_time = start_time;
-  if (end_time !== undefined) update.end_time = end_time;
-  if (professional_id !== undefined) update.professional_id = professional_id;
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
+  }
 
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from('breaks')
+    .from('professionals')
     .update(update)
     .eq('id', id)
     .eq('org_id', org.id)
@@ -52,7 +55,7 @@ export async function PUT(
   }
 
   if (!data) {
-    return NextResponse.json({ error: 'Descanso no encontrado' }, { status: 404 });
+    return NextResponse.json({ error: 'Profesional no encontrado' }, { status: 404 });
   }
 
   return NextResponse.json(data);
@@ -72,7 +75,7 @@ export async function DELETE(
   const supabase = await createClient();
 
   const { error, count } = await supabase
-    .from('breaks')
+    .from('professionals')
     .delete({ count: 'exact' })
     .eq('id', id)
     .eq('org_id', org.id);
@@ -82,7 +85,7 @@ export async function DELETE(
   }
 
   if (count === 0) {
-    return NextResponse.json({ error: 'Descanso no encontrado' }, { status: 404 });
+    return NextResponse.json({ error: 'Profesional no encontrado' }, { status: 404 });
   }
 
   return NextResponse.json({ success: true });

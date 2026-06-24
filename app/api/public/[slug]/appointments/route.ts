@@ -19,12 +19,13 @@ export async function POST(
     );
   }
 
-  const { serviceId, starts_at, customer_name, customer_phone, customer_email } = body as {
+  const { serviceId, starts_at, customer_name, customer_phone, customer_email, professionalId } = body as {
     serviceId?: string;
     starts_at?: string;
     customer_name?: string;
     customer_phone?: string;
     customer_email?: string;
+    professionalId?: string;
   };
 
   // Validate required fields
@@ -61,6 +62,7 @@ export async function POST(
     p_name: customer_name,
     p_phone: customer_phone,
     p_email: customer_email,
+    p_professional_id: professionalId || null,
   });
 
   if (error) {

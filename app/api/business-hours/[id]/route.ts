@@ -20,10 +20,11 @@ export async function PUT(
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
   }
 
-  const { weekday, start_time, end_time } = body as {
+  const { weekday, start_time, end_time, professional_id } = body as {
     weekday?: number;
     start_time?: string;
     end_time?: string;
+    professional_id?: string;
   };
 
   if (weekday !== undefined && (typeof weekday !== 'number' || weekday < 0 || weekday > 6)) {
@@ -34,6 +35,7 @@ export async function PUT(
   if (weekday !== undefined) update.weekday = weekday;
   if (start_time !== undefined) update.start_time = start_time;
   if (end_time !== undefined) update.end_time = end_time;
+  if (professional_id !== undefined) update.professional_id = professional_id;
 
   const supabase = await createClient();
 

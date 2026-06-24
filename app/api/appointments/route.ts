@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 
   const { data: appts, error } = await supabase
     .from('appointments')
-    .select('id,starts_at,ends_at,customer_name,customer_phone,customer_email,status,service_id,client_id')
+    .select('id,starts_at,ends_at,customer_name,customer_phone,customer_email,status,service_id,client_id,professional_id')
     .eq('org_id', org.id)
     .gte('starts_at', startOfDay)
     .lte('starts_at', endOfDay)
@@ -79,12 +79,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
   }
 
-  const { service_id, starts_at, customer_name, customer_phone, customer_email } = body as {
+  const { service_id, starts_at, customer_name, customer_phone, customer_email, professional_id } = body as {
     service_id?: string;
     starts_at?: string;
     customer_name?: string;
     customer_phone?: string;
     customer_email?: string;
+    professional_id?: string;
   };
 
   if (!service_id || !starts_at || !customer_name || !customer_phone || !customer_email) {
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
     p_name: customer_name,
     p_phone: customer_phone,
     p_email: customer_email,
+    p_professional_id: professional_id ?? null,
   });
 
   if (error) {

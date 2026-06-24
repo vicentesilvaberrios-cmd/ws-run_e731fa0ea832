@@ -10,6 +10,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const serviceId = searchParams.get('serviceId');
   const date = searchParams.get('date');
+  const professionalId = searchParams.get('professionalId');
 
   if (!serviceId || !date) {
     return NextResponse.json(
@@ -32,6 +33,7 @@ export async function GET(
     p_slug: slug,
     p_service_id: serviceId,
     p_date: date,
+    p_professional_id: professionalId || null,
   });
 
   if (error) {
